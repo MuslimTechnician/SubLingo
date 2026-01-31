@@ -42,35 +42,3 @@ export const parseSRTTime = (timeString: string): number => {
 
   return hours * 3600 + minutes * 60 + seconds + milliseconds / 1000;
 };
-
-export const parseSRTFile = (srtContent: string): SubtitleSegment[] => {
-  const subtitles: SubtitleSegment[] = [];
-  const blocks = srtContent.trim().split(/\n\s*\n/);
-
-  for (const block of blocks) {
-    const lines = block.trim().split('\n');
-    if (lines.length < 3) continue;
-
-    // First line is index
-    // Second line is timestamp: 00:00:00,000 --> 00:00:05,000
-    const timeLine = lines[1];
-    const timeMatch = timeLine.match(/(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})/);
-
-    if (!timeMatch) continue;
-
-    const startTime = timeMatch[1];
-    const endTime = timeMatch[2];
-
-    // Remaining lines are subtitle text
-    const text = lines.slice(2).join('\n').trim();
-
-    subtitles.push({
-      startTime,
-      endTime,
-      originalText: text, // SRT doesn't have original text, so we use the same
-      text,
-    });
-  }
-
-  return subtitles;
-};

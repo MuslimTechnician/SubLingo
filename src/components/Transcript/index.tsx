@@ -1,25 +1,143 @@
-import { Download, Play, CheckCircle2 } from 'lucide-react';
+import { Download, Play, CheckCircle2, Gauge, Upload, Trash2 } from 'lucide-react';
 import { SubtitleSegment } from '@/types';
 import { SUPPORTED_LANGUAGES } from '@/constants/languages';
 
 interface TranscriptProps {
-  subtitles: SubtitleSegment[];
+  subtitles: SubtitleSegment[] | null;
   selectedLangCode: string;
   isDark: boolean;
+  isProcessing: boolean;
   onSeekTo: (timestamp: string) => void;
   onDownloadSRT: () => void;
+  onProcessSameLanguage?: () => void;
+  onProcessTranslated?: () => void;
+  onSRTUpload?: (subtitles: SubtitleSegment[] | null) => void;
+  onLanguageChange?: (code: string) => void;
+  srtInputRef?: React.RefObject<HTMLInputElement>;
 }
 
-export const Transcript = ({ subtitles, selectedLangCode, isDark, onSeekTo, onDownloadSRT }: TranscriptProps) => {
+export const Transcript = ({
+  subtitles,
+  selectedLangCode,
+  isDark,
+  isProcessing,
+  onSeekTo,
+  onDownloadSRT,
+  onProcessSameLanguage,
+  onProcessTranslated,
+  onSRTUpload,
+  onLanguageChange,
+  srtInputRef,
+}: TranscriptProps) => {
   const cardClass = isDark
     ? 'bg-zinc-900/50 border-zinc-800'
     : 'bg-white border-zinc-200 shadow-xl shadow-zinc-200/50';
   const textPrimary = isDark ? 'text-white' : 'text-zinc-900';
   const textSecondary = isDark ? 'text-zinc-400' : 'text-zinc-500';
 
+  // Show AI generation options when no subtitles
+  if (!subtitles) {
+    return (
+      <div className={`border rounded-3xl p-6 ${cardClass}`}>
+        <h3 className={`text-lg font-semibold mb-4 ${textPrimary}`}>Generate Subtitles</h3>
+
+        <div className="space-y-4">
+          {/* Same Language Button */}
+          {onProcessSameLanguage && (
+            <button
+              onClick={onProcessSameLanguage}
+              disabled={isProcessing}
+              className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-600/50 text-white px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2"
+            >
+              <Gauge className="w-4 h-4" />
+              Same Language
+            </button>
+          )}
+
+          {/* Translate Button */}
+          {onProcessTranslated && onLanguageChange && (
+            <div className="space-y-2">
+              <select
+                value={selectedLangCode}
+                onChange={(e) => onLanguageChange(e.target.value)}
+                className={`w-full text-sm rounded-lg px-3 py-2 outline-none ${
+                  isDark
+                    ? 'bg-zinc-800 border border-zinc-700 text-white'
+                    : 'bg-white border border-zinc-200 text-zinc-900'
+                }`}
+              >
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={onProcessTranslated}
+                disabled={isProcessing}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/50 text-white px-4 py-3 rounded-xl font-medium transition-all flex items-center justify-center gap-2"
+              >
+                <Gauge className="w-4 h-4" />
+                Translate to {SUPPORTED_LANGUAGES.find(l => l.code === selectedLangCode)?.name}
+              </button>
+            </div>
+          )}
+
+          {/* Or Divider */}
+          {(onProcessSameLanguage || onProcessTranslated) && onSRTUpload && (
+            <div className={`relative py-2 ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}>
+              <div className={`absolute inset-0 flex items-center ${isDark ? 'text-zinc-800' : 'text-zinc-200'}`}>
+                <div className="w-full border-t"></div>
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className={`px-2 ${isDark ? 'bg-zinc-900' : 'bg-white'}`}>Or</span>
+              </div>
+            </div>
+          )}
+
+          {/* Upload SRT */}
+          {onSRTUpload && srtInputRef && (
+            <button
+              onClick={() => srtInputRef.current?.click()}
+              className="w-full border-2 border-dashed rounded-xl px-4 py-6 flex flex-col items-center gap-2 transition-all hover:bg-zinc-800/50"
+            >
+              <Upload className={`w-6 h-6 ${textSecondary}`} />
+              <span className={`text-sm font-medium ${textSecondary}`}>Upload SRT File</span>
+              <input
+                ref={srtInputRef}
+                type="file"
+                accept=".srt"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                      const content = event.target?.result as string;
+                      const segments = parseSRT(content);
+                      onSRTUpload(segments);
+                    };
+                    reader.readAsText(file);
+                  }
+                }}
+                className="hidden"
+              />
+            </button>
+          )}
+
+          {/* Processing Indicator */}
+          {isProcessing && (
+            <div className={`text-center text-sm ${textSecondary}`}>
+              Processing video... This may take a few minutes.
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`max-h-[600px] border rounded-3xl flex flex-col shadow-xl backdrop-blur-sm overflow-hidden animate-in fade-in slide-in-from-bottom-8 duration-700 ${cardClass}`}
+      className={`border rounded-3xl flex flex-col shadow-xl backdrop-blur-sm overflow-hidden sticky top-6 ${cardClass}`}
     >
       <div
         className={`p-5 border-b backdrop-blur-md sticky top-0 z-10 flex justify-between items-center ${
@@ -54,7 +172,7 @@ export const Transcript = ({ subtitles, selectedLangCode, isDark, onSeekTo, onDo
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-0 scroll-smooth">
+      <div className="flex-1 overflow-y-auto p-0 scroll-smooth max-h-[calc(100vh-200px)]">
         <div className={`divide-y ${isDark ? 'divide-zinc-800/50' : 'divide-zinc-100'}`}>
           {subtitles.map((sub, idx) => {
             const hasOriginalText = sub.originalText !== sub.text;
@@ -108,3 +226,23 @@ export const Transcript = ({ subtitles, selectedLangCode, isDark, onSeekTo, onDo
     </div>
   );
 };
+
+// Helper function to parse SRT
+function parseSRT(content: string): SubtitleSegment[] {
+  const blocks = content.trim().split(/\n\n+/);
+  return blocks.map((block) => {
+    const lines = block.split('\n');
+    const index = lines[0];
+    const time = lines[1];
+    const text = lines.slice(2).join('\n');
+
+    const [startTime, endTime] = time.split(' --> ');
+
+    return {
+      startTime,
+      endTime,
+      originalText: text,
+      text,
+    };
+  });
+}
