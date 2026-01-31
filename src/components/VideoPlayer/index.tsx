@@ -10,16 +10,20 @@ import {
   Settings,
   Gauge,
   Subtitles,
-  Plus,
-  Minus,
   Type,
+  Palette,
+  X,
   Rewind,
   FastForward,
   Upload,
+  Trash2,
+  Check,
 } from 'lucide-react';
 import { SUPPORTED_LANGUAGES } from '@/constants/languages';
 import { parseSRTFile } from '@/lib/utils';
-import { SubtitleSegment } from '@/types';
+import { SubtitleSegment, SubtitleStyle } from '@/types';
+import { useSubtitleStyles } from '@/hooks/useSubtitleStyles';
+import { useGoogleFonts, loadFontCSS } from '@/hooks/useGoogleFonts';
 
 interface VideoPlayerProps {
   videoRef: React.RefObject<HTMLVideoElement>;
@@ -50,17 +54,19 @@ export const VideoPlayer = ({
   onRemove,
   onSRTUpload,
 }: VideoPlayerProps) => {
+  const { fonts: googleFonts, isLoading: fontsLoading } = useGoogleFonts();
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [playbackRate, setPlaybackRate] = useState(1);
-  const [subtitleSize, setSubtitleSize] = useState<1 | 2 | 3>(2);
   const [showControls, setShowControls] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
   const [showCCMenu, setShowCCMenu] = useState(false);
+  const [showStylePanel, setShowStylePanel] = useState(false);
   const [isSeeking, setIsSeeking] = useState(false);
+  const { style: subtitleStyle, updateStyle: updateSubtitleStyle } = useSubtitleStyles();
   const srtInputRef = useRef<HTMLInputElement>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout>();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -92,6 +98,13 @@ export const VideoPlayer = ({
       }
     };
   }, []);
+
+  // Load font dynamically when font family changes
+  useEffect(() => {
+    if (subtitleStyle.fontFamily) {
+      loadFontCSS(subtitleStyle.fontFamily);
+    }
+  }, [subtitleStyle.fontFamily]);
 
   // Video event handlers
   useEffect(() => {
@@ -255,15 +268,6 @@ export const VideoPlayer = ({
     }
   }, []);
 
-  const changeSubtitleSize = useCallback((delta: number) => {
-    setSubtitleSize((prev) => {
-      const newSize = prev + delta;
-      if (newSize < 1) return 1;
-      if (newSize > 3) return 3;
-      return newSize as 1 | 2 | 3;
-    });
-  }, []);
-
   const handleSRTFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -315,11 +319,18 @@ export const VideoPlayer = ({
           <FileVideo className={`w-5 h-5 ${accentText}`} />
           Media Source
         </h2>
-        {!subtitles && !isProcessing && (
-          <button onClick={onRemove} className={`text-xs ${textSecondary} hover:text-red-500 transition-colors`}>
-            Remove
-          </button>
-        )}
+        <button
+          onClick={onRemove}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            isDark
+              ? 'bg-zinc-800 text-zinc-400 hover:bg-red-600/20 hover:text-red-400 border border-zinc-700'
+              : 'bg-zinc-100 text-zinc-600 hover:bg-red-50 hover:text-red-600 border border-zinc-200'
+          }`}
+          title="Remove video and subtitles"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          Remove
+        </button>
       </div>
 
       <div className="space-y-4">
@@ -352,9 +363,12 @@ export const VideoPlayer = ({
           {currentSubtitle && (
             <div className="absolute bottom-20 left-4 right-4 flex justify-center pointer-events-none">
               <div
-                className="bg-black/80 text-white text-center font-medium px-4 py-2 rounded shadow-lg"
+                className="text-center font-medium px-4 py-2 rounded shadow-lg"
                 style={{
-                  fontSize: subtitleSize === 1 ? '1rem' : subtitleSize === 2 ? '1.125rem' : '1.375rem',
+                  backgroundColor: subtitleStyle.backgroundColor + Math.round(subtitleStyle.bgOpacity * 255).toString(16).padStart(2, '0'),
+                  color: subtitleStyle.textColor,
+                  fontFamily: subtitleStyle.fontFamily,
+                  fontSize: `${subtitleStyle.fontSize}px`,
                   lineHeight: '1.5',
                 }}
               >
@@ -481,6 +495,21 @@ export const VideoPlayer = ({
 
               {/* Right Controls */}
               <div className="flex items-center gap-1">
+                {/* Subtitle Style Button (Palette) */}
+                <div className="relative">
+                  <button
+                    onClick={() => {
+                      setShowStylePanel(!showStylePanel);
+                      setShowCCMenu(false);
+                      setShowSettings(false);
+                    }}
+                    className="p-1.5 transition-transform active:scale-95 text-white"
+                    title="Subtitle Style"
+                  >
+                    <Palette className="w-5 h-5" />
+                  </button>
+                </div>
+
                 {/* CC/Subtitles Button */}
                 <div className="relative">
                   <button
@@ -502,79 +531,40 @@ export const VideoPlayer = ({
                         onClick={() => setShowCCMenu(false)}
                       />
                       <div
-                        className={`absolute bottom-full right-0 mb-2 rounded-lg shadow-2xl z-20 w-72 ${
+                        className={`absolute bottom-full right-0 mb-2 rounded-lg shadow-2xl z-20 w-48 ${
                           isDark ? 'bg-zinc-900 border border-zinc-700' : 'bg-white border border-zinc-200'
                         }`}
                       >
-                        <div className="p-3">
-                          <div className={`text-xs font-semibold uppercase tracking-wider mb-3 ${textSecondary}`}>
-                            Subtitles
-                          </div>
-
-                          {/* Subtitle Size */}
-                          <div className="mb-4">
-                            <div className={`text-xs font-medium mb-2 ${textPrimary}`}>Size</div>
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => changeSubtitleSize(-1)}
-                                className={`p-1.5 rounded transition-colors ${
-                                  isDark
-                                    ? 'bg-zinc-800 hover:bg-zinc-700 text-white'
-                                    : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-900'
-                                }`}
-                              >
-                                <Minus className="w-4 h-4" />
-                              </button>
-                              <div className={`text-sm flex-1 text-center ${textPrimary}`}>
-                                {subtitleSize === 1 ? 'Small' : subtitleSize === 2 ? 'Medium' : 'Large'}
-                              </div>
-                              <button
-                                onClick={() => changeSubtitleSize(1)}
-                                className={`p-1.5 rounded transition-colors ${
-                                  isDark
-                                    ? 'bg-zinc-800 hover:bg-zinc-700 text-white'
-                                    : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-900'
-                                }`}
-                              >
-                                <Plus className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Import SRT */}
-                          <div className="mb-3">
-                            <div className={`text-xs font-medium mb-2 ${textPrimary}`}>Import</div>
-                            <input
-                              ref={srtInputRef}
-                              type="file"
-                              accept=".srt"
-                              onChange={handleSRTFileUpload}
-                              className="hidden"
-                            />
-                            <button
-                              onClick={() => srtInputRef.current?.click()}
-                              className={`w-full flex items-center justify-center gap-2 p-2.5 rounded-lg transition-colors ${
-                                isDark
-                                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                                  : 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                              }`}
-                            >
-                              <Upload className="w-4 h-4" />
-                              <span className="text-sm font-medium">Upload SRT File</span>
-                            </button>
-                          </div>
-
-                          {/* Clear Subtitles */}
+                        <div className="p-2 flex flex-col gap-2">
+                          <input
+                            ref={srtInputRef}
+                            type="file"
+                            accept=".srt"
+                            onChange={handleSRTFileUpload}
+                            className="hidden"
+                          />
+                          <button
+                            onClick={() => srtInputRef.current?.click()}
+                            className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg transition-colors text-sm font-medium w-full ${
+                              isDark
+                                ? 'bg-indigo-600 hover:bg-indigo-500 text-white'
+                                : 'bg-indigo-500 hover:bg-indigo-600 text-white'
+                            }`}
+                          >
+                            <Upload className="w-4 h-4" />
+                            Import Subtitle
+                          </button>
                           {subtitles && (
                             <button
                               onClick={handleClearSubtitles}
-                              className={`w-full p-2.5 rounded-lg transition-colors text-sm ${
+                              className={`flex items-center justify-center gap-2 px-4 py-3 rounded-lg transition-colors text-sm font-medium w-full ${
                                 isDark
-                                  ? 'bg-zinc-800 hover:bg-red-600/20 text-zinc-300 hover:text-red-400'
-                                  : 'bg-zinc-100 hover:bg-red-50 text-zinc-700 hover:text-red-600'
+                                  ? 'bg-zinc-800 hover:bg-red-600/20 text-zinc-300 hover:text-red-400 border border-zinc-700'
+                                  : 'bg-zinc-100 hover:bg-red-50 text-zinc-700 hover:text-red-600 border border-zinc-200'
                               }`}
                             >
-                              Clear Subtitles
+                              <Trash2 className="w-4 h-4" />
+                              Clear Subtitle
                             </button>
                           )}
                         </div>
@@ -582,6 +572,135 @@ export const VideoPlayer = ({
                     </>
                   )}
                 </div>
+
+                {/* Subtitle Style Panel */}
+                {showStylePanel && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-10"
+                      onClick={() => setShowStylePanel(false)}
+                    />
+                    <div
+                      className={`absolute bottom-12 right-0 z-30 w-72 rounded-xl shadow-2xl backdrop-blur-xl ${
+                        isDark
+                          ? 'bg-zinc-900/95 border border-zinc-700'
+                          : 'bg-white/95 border border-zinc-200'
+                      }`}
+                    >
+                      {/* Header */}
+                      <div className={`flex items-center justify-between px-4 pt-4 pb-3 border-b ${isDark ? 'border-zinc-700/50' : 'border-zinc-200/50'}`}>
+                        <h4 className={`text-sm font-semibold flex items-center gap-2 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+                          <Type className={`w-4 h-4 ${isDark ? 'text-indigo-400' : 'text-indigo-500'}`} />
+                          Subtitle Style
+                        </h4>
+                        <button
+                          onClick={() => setShowStylePanel(false)}
+                          className={isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-500 hover:text-zinc-900'}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Scrollable Content */}
+                      <div className="p-4 space-y-3 max-h-[360px] overflow-y-auto">
+                        {/* 1. Google Font Selector */}
+                        <div className="space-y-1">
+                          <label className={`text-xs font-medium ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>Font Family</label>
+                          <select
+                            value={subtitleStyle.fontFamily}
+                            onChange={(e) => updateSubtitleStyle({ fontFamily: e.target.value })}
+                            className={`w-full text-xs rounded-lg px-3 py-2 outline-none appearance-none cursor-pointer ${
+                              isDark
+                                ? 'bg-zinc-800 border border-zinc-700 text-white'
+                                : 'bg-white border border-zinc-200 text-zinc-900'
+                            }`}
+                            style={{ fontFamily: subtitleStyle.fontFamily }}
+                            disabled={fontsLoading}
+                          >
+                            {fontsLoading ? (
+                              <option>Loading fonts...</option>
+                            ) : (
+                              googleFonts.map((font) => (
+                                <option key={font} value={font}>
+                                  {font}
+                                </option>
+                              ))
+                            )}
+                          </select>
+                        </div>
+
+                        {/* 2. Color Pickers (Text & Background) */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <label className={`text-xs font-medium ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                              Text
+                            </label>
+                            <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border ${isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                              <input
+                                type="color"
+                                value={subtitleStyle.textColor}
+                                onChange={(e) => updateSubtitleStyle({ textColor: e.target.value })}
+                                className="w-5 h-5 rounded cursor-pointer bg-transparent border-none p-0"
+                              />
+                              <span className={`text-[10px] font-mono flex-1 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>{subtitleStyle.textColor}</span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className={`text-xs font-medium ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                              Background
+                            </label>
+                            <div className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border ${isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+                              <input
+                                type="color"
+                                value={subtitleStyle.backgroundColor}
+                                onChange={(e) => updateSubtitleStyle({ backgroundColor: e.target.value })}
+                                className="w-5 h-5 rounded cursor-pointer bg-transparent border-none p-0"
+                              />
+                              <span className={`text-[10px] font-mono flex-1 ${isDark ? 'text-zinc-300' : 'text-zinc-700'}`}>{subtitleStyle.backgroundColor}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* 3. Interactive Sliders */}
+                        <div className="space-y-2">
+                          {/* Font Size */}
+                          <div className="space-y-1">
+                            <div className={`flex justify-between text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                              <span>Font Size</span>
+                              <span className={isDark ? 'text-zinc-300' : 'text-zinc-700'}>{subtitleStyle.fontSize}px</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="12"
+                              max="72"
+                              value={subtitleStyle.fontSize}
+                              onChange={(e) => updateSubtitleStyle({ fontSize: parseInt(e.target.value) })}
+                              className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer accent-indigo-500"
+                            />
+                          </div>
+
+                          {/* Background Opacity */}
+                          <div className="space-y-1">
+                            <div className={`flex justify-between text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                              <span>Opacity</span>
+                              <span className={isDark ? 'text-zinc-300' : 'text-zinc-700'}>{Math.round(subtitleStyle.bgOpacity * 100)}%</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="0.05"
+                              value={subtitleStyle.bgOpacity}
+                              onChange={(e) => updateSubtitleStyle({ bgOpacity: parseFloat(e.target.value) })}
+                              className="w-full h-1.5 bg-zinc-700 rounded-full appearance-none cursor-pointer accent-indigo-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* Settings Button */}
                 <div className="relative">

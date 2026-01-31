@@ -10,3 +10,11 @@ export interface Language {
     name: string;
     nativeName: string;
 }
+
+export interface SubtitleStyle {
+    backgroundColor: string;
+    textColor: string;
+    fontFamily: string;
+    fontSize: number;
+    bgOpacity: number;
+}
