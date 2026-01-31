@@ -13,12 +13,12 @@ import {
   FastForward,
   Trash2,
 } from 'lucide-react';
-import { SubtitleSegment, SubtitleStyle } from '@/types';
+import { SubtitleSegment } from '@/types';
 import { useSubtitleStyles } from '@/hooks/useSubtitleStyles';
 import { useGoogleFonts, loadFontCSS } from '@/hooks/useGoogleFonts';
 
 interface VideoPlayerProps {
-  videoRef: React.RefObject<HTMLVideoElement>;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
   videoUrl: string;
   currentSubtitle: string;
   isDark: boolean;
@@ -31,7 +31,6 @@ export const VideoPlayer = ({
   videoUrl,
   currentSubtitle,
   isDark,
-  subtitles,
   onRemove,
 }: VideoPlayerProps) => {
   const { fonts: googleFonts, isLoading: fontsLoading } = useGoogleFonts();
@@ -46,7 +45,7 @@ export const VideoPlayer = ({
   const [isSeeking, setIsSeeking] = useState(false);
   const { style: subtitleStyle, updateStyle: updateSubtitleStyle } = useSubtitleStyles();
   const containerRef = useRef<HTMLDivElement>(null);
-  const progressRef = useRef<HTMLDivElement>(null);
+  const progressInputRef = useRef<HTMLInputElement>(null);
 
   // Refs for popup positioning
   const mobilePaletteButtonRef = useRef<HTMLButtonElement>(null);
@@ -330,7 +329,7 @@ export const VideoPlayer = ({
 
         {/* Top Controls Overlay - Mobile Only */}
         <div className="absolute top-0 left-0 right-0 p-2 flex items-center justify-between sm:hidden">
-          {/* Left: Remove & Fullscreen */}
+          {/* Left: Remove, Mute, Fullscreen */}
           <div className="flex items-center gap-1">
             <button
               onClick={(e) => {
@@ -341,6 +340,16 @@ export const VideoPlayer = ({
               title="Remove video"
             >
               <Trash2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleMute();
+              }}
+              className="p-2 bg-black/50 backdrop-blur-sm rounded-lg text-white hover:bg-zinc-700 transition-colors"
+              title="Mute"
+            >
+              {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
             </button>
             <button
               onClick={(e) => {
@@ -422,9 +431,12 @@ export const VideoPlayer = ({
 
         {/* Subtitle Overlay */}
         {currentSubtitle && (
-          <div className="absolute bottom-16 left-4 right-4 flex justify-center pointer-events-none sm:bottom-8">
+          <div
+            className="absolute left-4 right-4 flex justify-center pointer-events-none"
+            style={{ bottom: `${subtitleStyle.bottomPosition}%` }}
+          >
             <div
-              className="text-center font-medium px-4 py-2 rounded shadow-lg"
+              className="text-center font-medium px-2 py-1 rounded shadow-lg"
               style={{
                 backgroundColor: subtitleStyle.backgroundColor + Math.round(subtitleStyle.bgOpacity * 255).toString(16).padStart(2, '0'),
                 color: subtitleStyle.textColor,
@@ -467,7 +479,7 @@ export const VideoPlayer = ({
                 style={{ left: `${getProgress()}%` }}
               />
               <input
-                ref={progressRef}
+                ref={progressInputRef}
                 type="range"
                 min="0"
                 max="100"
@@ -546,36 +558,6 @@ export const VideoPlayer = ({
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   />
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Mobile: Volume Only */}
-          <div className="flex sm:hidden items-center gap-1 justify-center">
-            <button
-              onClick={toggleMute}
-              className={`p-1.5 transition-transform active:scale-95 rounded ${
-                isDark ? 'hover:bg-zinc-800 text-zinc-400' : 'hover:bg-zinc-100 text-zinc-600'
-              }`}
-              title="Mute"
-            >
-              {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-            </button>
-            <div className="w-24 relative">
-              <div className={`relative h-1 rounded-full cursor-pointer ${isDark ? 'bg-zinc-700' : 'bg-zinc-200'}`}>
-                <div
-                  className={`absolute h-1 rounded-full transition-all duration-75 ${isDark ? 'bg-white' : 'bg-zinc-900'}`}
-                  style={{ width: `${(isMuted ? 0 : volume) * 100}%` }}
-                />
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  value={isMuted ? 0 : volume}
-                  onChange={handleVolumeChange}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                />
               </div>
             </div>
           </div>
@@ -695,7 +677,7 @@ export const VideoPlayer = ({
                 </div>
                 <input
                   type="range"
-                  min="12"
+                  min="10"
                   max="48"
                   step="1"
                   value={subtitleStyle.fontSize}
@@ -743,6 +725,23 @@ export const VideoPlayer = ({
                   step="0.1"
                   value={subtitleStyle.bgOpacity}
                   onChange={(e) => updateSubtitleStyle({ bgOpacity: parseFloat(e.target.value) })}
+                  className="w-full h-1 bg-zinc-700 rounded-full appearance-none cursor-pointer accent-indigo-500"
+                />
+              </div>
+
+              {/* Bottom Position Slider */}
+              <div className="mt-2 px-3 py-1.5">
+                <div className={`flex justify-between text-xs mb-1 ${textSecondary}`}>
+                  <span>Bottom Position</span>
+                  <span className={isDark ? 'text-zinc-300' : 'text-zinc-700'}>{subtitleStyle.bottomPosition}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="30"
+                  step="1"
+                  value={subtitleStyle.bottomPosition}
+                  onChange={(e) => updateSubtitleStyle({ bottomPosition: parseInt(e.target.value) })}
                   className="w-full h-1 bg-zinc-700 rounded-full appearance-none cursor-pointer accent-indigo-500"
                 />
               </div>

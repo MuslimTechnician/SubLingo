@@ -1,4 +1,4 @@
-import { SubtitleSegment } from "./types";
+import { SubtitleSegment } from "@/types";
 
 export const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
   return new Promise((resolve, reject) => {

@@ -1,12 +1,14 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { SubtitleSegment } from '@/types';
 import { fileToGenerativePart } from '@/lib/utils';
+import { extractAudioFromVideo } from '@/lib/audioExtractor';
 
 export const processVideoWithGemini = async (
   file: File,
   targetLanguage: string,
   apiKey: string,
-  enableTranslation: boolean = true
+  enableTranslation: boolean = true,
+  onProgress?: (stage: string, progress: number) => void
 ): Promise<SubtitleSegment[]> => {
   if (!apiKey) {
     throw new Error("API Key is missing. Please configure it in settings.");
@@ -14,42 +16,100 @@ export const processVideoWithGemini = async (
 
   const ai = new GoogleGenAI({ apiKey });
 
-  // Convert file to base64 for the API
-  const filePart = await fileToGenerativePart(file);
+  // Extract audio from video first to reduce payload size
+  // This reduces file size by ~90% allowing longer videos within API limits
+  if (onProgress) {
+    onProgress('extracting_audio', 0);
+  }
+
+  const audioFile = await extractAudioFromVideo(file, (progress) => {
+    if (onProgress) {
+      onProgress('extracting_audio', progress);
+    }
+  });
+
+  if (onProgress) {
+    onProgress('extracting_audio', 100);
+  }
+
+  // Convert audio file to base64 for the API
+  const filePart = await fileToGenerativePart(audioFile);
 
   const prompt = enableTranslation ? `
-    Task: Extract voices from the provided video file, transcribe them, and translate the transcription with native-level contextual adaptation.
+    Task:
+    You are given an audio file. Your task is to:
+    1. Detect the source language automatically.
+    2. Transcribe all speech accurately.
+    3. Translate the transcription into ${targetLanguage} with native-level, context-aware adaptation.
 
-    Target Language for Translation: ${targetLanguage}
+    Translation Rules:
+    - Analyze the content to determine domain (e.g., news, education, spiritual, technical) and tone (e.g., formal, conversational).
+    - Translate meaning, not words. Do not translate literally.
+    - Use terminology, idioms, and phrasing natural to ${targetLanguage} for that domain.
+    - Preserve intent, emphasis, and emotional tone.
+    - Do not summarize, add commentary, or invent content.
 
-    Requirements:
-    - Contextual Analysis: Analyze the audio to determine the specific domain, subject matter, and tone (e.g., formal, professional, spiritual, or technical).
-    - Domain-Specific Translation: Translate the content according to the linguistic norms of that specific field. Avoid literal word-for-word translation. Instead, use the terminology, idioms, and stylistic conventions that a native speaker of ${targetLanguage} would naturally use when discussing that specific topic.
-    - Source Language Detection: Automatically detect the source language and segment the speech into logical subtitle chunks.
+    Segmentation Rules:
+    - Divide speech into logical subtitle chunks based on pauses, sentence boundaries, and meaning.
+    - Each chunk should be readable within its time window.
 
-    Data Mapping: For each chunk, provide:
-    - 'startTime' and 'endTime' in strictly SRT format (HH:MM:SS,mmm).
-    - 'originalText': The transcription in the original source language.
-    - 'text': The adaptively translated text in ${targetLanguage}.
+    Timing Rules:
+    - Provide accurate 'startTime' and 'endTime' for each chunk.
+    - Format strictly in SRT style: HH:MM:SS,mmm
+    - Ensure startTime < endTime, no overlapping ranges, and continuous flow.
 
-    Output strictly in JSON format matching the requested schema.
+    Output Rules:
+    - Output **only** valid JSON, strictly following this schema:
+
+    JSON Schema:
+    [
+      {
+        "startTime": "00:00:01,500",
+        "endTime": "00:00:04,200",
+        "originalText": "Transcription in the detected language",
+        "text": "Context-adapted translation in ${targetLanguage}"
+      }
+    ]
   ` : `
-    Task: Extract voices from the provided video file and transcribe them accurately without translation.
+    Task:
+    You are given an audio file. Your task is to:
+    1. Detect the source language automatically.
+    2. Transcribe all speech accurately without translation.
 
-    Requirements:
-    - Accurate Transcription: Transcribe the speech exactly as spoken, maintaining proper punctuation, capitalization, and grammar.
-    - Source Language Detection: Automatically detect the source language.
-    - Logical Segmentation: Segment the speech into logical subtitle chunks with appropriate timing.
+    Transcription Rules:
+    - Preserve punctuation, capitalization, and spoken grammar.
+    - Transcribe exactly as spoken. Do not paraphrase or summarize.
+    - Exclude non-speech sounds unless they are clearly words (e.g., "uh", "okay").
 
-    Data Mapping: For each chunk, provide:
-    - 'startTime' and 'endTime' in strictly SRT format (HH:MM:SS,mmm).
-    - 'originalText': The transcription in the original language.
-    - 'text': Same as originalText (no translation).
+    Segmentation Rules:
+    - Divide speech into logical subtitle chunks based on pauses, sentence boundaries, and meaning.
+    - Each chunk should be readable within its time window.
 
-    Output strictly in JSON format matching the requested schema.
+    Timing Rules:
+    - Provide accurate 'startTime' and 'endTime' for each chunk.
+    - Format strictly in SRT style: HH:MM:SS,mmm
+    - Ensure startTime < endTime, no overlapping ranges, and continuous flow.
+
+    Output Rules:
+    - Output **only** valid JSON, strictly following this schema:
+
+    JSON Schema:
+    [
+      {
+        "startTime": "00:00:01,500",
+        "endTime": "00:00:04,200",
+        "originalText": "Exact transcription in the detected language",
+        "text": "Exact transcription in the detected language"
+      }
+    ]
   `;
 
   try {
+    // Update progress to show AI processing is starting
+    if (onProgress) {
+      onProgress('processing_ai', 0);
+    }
+
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: {
@@ -92,8 +152,8 @@ export const processVideoWithGemini = async (
   } catch (error: any) {
     console.error("Gemini API Error:", error);
     if (error.message?.includes("413")) {
-       throw new Error("File is too large for the browser-based API call. Please use a shorter video clip (< 20MB) for this demo.");
+       throw new Error("File is too large for the browser-based API call. Please try a shorter video or audio clip.");
     }
-    throw new Error("Failed to process video: " + (error.message || "Unknown error"));
+    throw new Error("Failed to process audio: " + (error.message || "Unknown error"));
   }
 };

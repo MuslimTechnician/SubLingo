@@ -1,4 +1,4 @@
-import { Language } from "./types";
+import { Language } from "@/types";
 
 export const SUPPORTED_LANGUAGES: Language[] = [
   { code: "en", name: "English", nativeName: "English" },

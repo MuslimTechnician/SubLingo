@@ -9,7 +9,6 @@ import { MenuSheet } from '@/components/MenuSheet';
 import { UploadZone, handleFileValidation } from '@/components/UploadZone';
 import { VideoPlayer } from '@/components/VideoPlayer';
 import { Transcript } from '@/components/Transcript';
-import { StatusMessages } from '@/components/StatusMessages';
 
 export default function App() {
   const [file, setFile] = useState<File | null>(null);
@@ -21,7 +20,7 @@ export default function App() {
   const srtInputRef = useRef<HTMLInputElement>(null);
 
   const { isDark, toggleTheme } = useTheme();
-  const { apiKey, setApiKey, isProcessing, error, setError, processVideo } = useVideoProcessing();
+  const { apiKey, setApiKey, isProcessing, processingStage, setError, processVideo } = useVideoProcessing();
   const { videoRef, currentSubtitle, seekTo } = useSubtitles(subtitles);
 
   // Initialize settings on mount
@@ -101,6 +100,10 @@ export default function App() {
     setSubtitles(uploadedSubtitles);
   };
 
+  const handleClearTranscript = () => {
+    setSubtitles(null);
+  };
+
   const handleSaveApiKey = (key: string) => {
     setApiKey(key);
     if (key) setShowMenu(false);
@@ -142,18 +145,9 @@ export default function App() {
                 videoRef={videoRef}
                 videoUrl={videoUrl}
                 currentSubtitle={currentSubtitle}
-                selectedLangCode={selectedLangCode}
                 isDark={isDark}
                 subtitles={subtitles}
-                isProcessing={isProcessing}
                 onRemove={handleRemoveVideo}
-              />
-              <StatusMessages
-                isProcessing={isProcessing}
-                error={error}
-                selectedLangCode={selectedLangCode}
-                isDark={isDark}
-                isTranslationMode={isTranslationMode}
               />
 
               {/* Hero Text Below Video */}
@@ -175,8 +169,11 @@ export default function App() {
                 selectedLangCode={selectedLangCode}
                 isDark={isDark}
                 isProcessing={isProcessing}
+                processingStage={processingStage}
+                isTranslationMode={isTranslationMode}
                 onSeekTo={seekTo}
                 onDownloadSRT={downloadSRT}
+                onClearTranscript={handleClearTranscript}
                 onProcessSameLanguage={handleProcessSameLanguage}
                 onProcessTranslated={handleProcessTranslated}
                 onSRTUpload={handleSRTUpload}

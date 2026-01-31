@@ -17,4 +17,5 @@ export interface SubtitleStyle {
     fontFamily: string;
     fontSize: number;
     bgOpacity: number;
+    bottomPosition: number; // Distance from bottom in percentage (0-100)
 }

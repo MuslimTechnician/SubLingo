@@ -4,11 +4,14 @@ import { processVideoWithGemini } from '@/services/geminiService';
 
 const API_KEY_STORAGE = 'gemini_api_key';
 
+export type ProcessingStage = 'idle' | 'extracting_audio' | 'processing_ai';
+
 export const useVideoProcessing = () => {
   const [apiKey, setApiKey] = useState<string>(() => {
     return localStorage.getItem(API_KEY_STORAGE) || '';
   });
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStage, setProcessingStage] = useState<ProcessingStage>('idle');
   const [error, setError] = useState<string | null>(null);
 
   const saveApiKey = (key: string) => {
@@ -26,7 +29,15 @@ export const useVideoProcessing = () => {
 
     try {
       const langName = SUPPORTED_LANGUAGES.find((l) => l.code === selectedLangCode)?.name || 'English';
-      const result = await processVideoWithGemini(file, langName, apiKey, enableTranslation);
+      const result = await processVideoWithGemini(
+        file,
+        langName,
+        apiKey,
+        enableTranslation,
+        (stage) => {
+          setProcessingStage(stage as ProcessingStage);
+        }
+      );
       return result;
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to process video.';
@@ -34,6 +45,7 @@ export const useVideoProcessing = () => {
       throw err;
     } finally {
       setIsProcessing(false);
+      setProcessingStage('idle');
     }
   };
 
@@ -41,6 +53,7 @@ export const useVideoProcessing = () => {
     apiKey,
     setApiKey: saveApiKey,
     isProcessing,
+    processingStage,
     error,
     setError,
     processVideo,

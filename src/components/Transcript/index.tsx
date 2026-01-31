@@ -1,19 +1,23 @@
-import { Download, Play, CheckCircle2, Gauge, Upload, Trash2 } from 'lucide-react';
+import { Download, Play, CheckCircle2, Gauge, Upload, Trash2, Loader2 } from 'lucide-react';
 import { SubtitleSegment } from '@/types';
 import { SUPPORTED_LANGUAGES } from '@/constants/languages';
+import { ProcessingStage } from '@/hooks/useVideoProcessing';
 
 interface TranscriptProps {
   subtitles: SubtitleSegment[] | null;
   selectedLangCode: string;
   isDark: boolean;
   isProcessing: boolean;
+  processingStage: ProcessingStage;
+  isTranslationMode?: boolean;
   onSeekTo: (timestamp: string) => void;
   onDownloadSRT: () => void;
+  onClearTranscript?: () => void;
   onProcessSameLanguage?: () => void;
   onProcessTranslated?: () => void;
   onSRTUpload?: (subtitles: SubtitleSegment[] | null) => void;
   onLanguageChange?: (code: string) => void;
-  srtInputRef?: React.RefObject<HTMLInputElement>;
+  srtInputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
 export const Transcript = ({
@@ -21,8 +25,11 @@ export const Transcript = ({
   selectedLangCode,
   isDark,
   isProcessing,
+  processingStage,
+  isTranslationMode = false,
   onSeekTo,
   onDownloadSRT,
+  onClearTranscript,
   onProcessSameLanguage,
   onProcessTranslated,
   onSRTUpload,
@@ -126,8 +133,10 @@ export const Transcript = ({
 
           {/* Processing Indicator */}
           {isProcessing && (
-            <div className={`text-center text-sm ${textSecondary}`}>
-              Processing video... This may take a few minutes.
+            <div className={`text-center text-sm ${textSecondary} flex items-center justify-center gap-2`}>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              {processingStage === 'extracting_audio' && 'Extracting audio from video...'}
+              {processingStage === 'processing_ai' && 'Processing with AI... This may take a few minutes.'}
             </div>
           )}
         </div>
@@ -151,13 +160,19 @@ export const Transcript = ({
           <h2 className={`text-lg font-semibold ${textPrimary}`}>Transcript</h2>
         </div>
         <div className="flex items-center gap-2">
-          <span
-            className={`text-xs font-mono px-2.5 py-1.5 rounded-md ${
-              isDark ? 'bg-zinc-800 text-zinc-400' : 'bg-zinc-100 text-zinc-500'
-            }`}
-          >
-            {subtitles.length} lines
-          </span>
+          {onClearTranscript && (
+            <button
+              onClick={onClearTranscript}
+              className={`p-2 rounded-lg border transition-all flex items-center justify-center hover:scale-105 active:scale-95 ${
+                isDark
+                  ? 'bg-zinc-800 hover:bg-red-600/20 border-zinc-700 text-zinc-400 hover:text-red-400'
+                  : 'bg-white hover:bg-red-50 border-zinc-200 text-zinc-600 hover:text-red-600 shadow-sm'
+              }`}
+              title="Clear transcript"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
           <button
             onClick={onDownloadSRT}
             className={`p-2 rounded-lg border transition-all flex items-center justify-center hover:scale-105 active:scale-95 ${
@@ -183,6 +198,15 @@ export const Transcript = ({
                 className={`p-5 transition-colors group ${isDark ? 'hover:bg-zinc-800/30' : 'hover:bg-zinc-50'}`}
               >
                 <div className="flex items-center gap-3 mb-2.5">
+                  <span
+                    className={`text-xs font-mono px-2 py-1 rounded transition-colors ${
+                      isDark
+                        ? 'text-zinc-500 bg-zinc-800'
+                        : 'text-zinc-500 bg-zinc-100'
+                    }`}
+                  >
+                    {idx + 1}
+                  </span>
                   <button
                     onClick={() => onSeekTo(sub.startTime)}
                     className={`text-xs font-mono px-2 py-1 rounded transition-colors flex items-center gap-1.5 cursor-pointer ${
@@ -213,7 +237,9 @@ export const Transcript = ({
                   )}
                   <div>
                     <p className={`text-[10px] uppercase tracking-wider mb-1 font-semibold text-emerald-500`}>
-                      {SUPPORTED_LANGUAGES.find((l) => l.code === selectedLangCode)?.name}
+                      {hasOriginalText && isTranslationMode
+                        ? SUPPORTED_LANGUAGES.find((l) => l.code === selectedLangCode)?.name
+                        : 'Original'}
                     </p>
                     <p className={`text-base font-medium leading-relaxed ${textPrimary}`}>{sub.text}</p>
                   </div>
@@ -232,7 +258,6 @@ function parseSRT(content: string): SubtitleSegment[] {
   const blocks = content.trim().split(/\n\n+/);
   return blocks.map((block) => {
     const lines = block.split('\n');
-    const index = lines[0];
     const time = lines[1];
     const text = lines.slice(2).join('\n');
 

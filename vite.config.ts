@@ -7,6 +7,11 @@ export default defineConfig({
   server: {
     port: 3000,
     host: '0.0.0.0',
+    headers: {
+      // Enable SharedArrayBuffer for FFmpeg.wasm (required for multi-threading)
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
   },
   plugins: [react()],
   resolve: {
@@ -19,5 +24,13 @@ export default defineConfig({
   build: {
     outDir: '../dist',
     emptyOutDir: true,
+  },
+  // Configure worker handling for FFmpeg.wasm
+  worker: {
+    format: 'es',
+    plugins: () => [react()],
+  },
+  optimizeDeps: {
+    exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
   },
 });
